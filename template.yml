@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "ECS deployment"
+
+Parameters:
+  DeployEnv:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - qa
+      - prod
+  AppName:
+    Type: String
+    Default: "test-ecs-poc"
+      
+# Mappings:
+
+Resources:
+  MyRepository:
+    Type: AWS::ECR::Repository
+    Properties: 
+      RepositoryName: !Sub ${DeployEnv}-${AppName}
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${DeployEnv}-${AppName}
+
+  
+
+Outputs:
+  EcrRepoName:
+    Value: !Ref MyRepository
+  EcrRepoArn:
+    Value: !GetAtt MyRepository.Arn
+  EcrRepoUri:
+    Value: !GetAtt MyRepository.RepositoryUri
