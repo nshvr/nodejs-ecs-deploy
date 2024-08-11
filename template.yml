@@ -36,3 +36,130 @@ Outputs:
     Value: !GetAtt MyRepository.Arn
   EcrRepoUri:
     Value: !GetAtt MyRepository.RepositoryUri
+
+
+
+
+  # Create an ECS Task Definition
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: MyTaskDefinition
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      NetworkMode: bridge
+      ContainerDefinitions:
+        - Name: MyContainer
+          Image: ecs-poc  # Replace with your ECR repository URI and image tag
+          Memory: 512
+          Cpu: 256
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3000
+              HostPort: 80
+
+  # Create an ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref ECSTaskDefinition
+      DesiredCount: 1
+      LaunchType: EC2
+      LoadBalancers:
+        - ContainerName: ecs-poc
+          ContainerPort: 3000
+          TargetGroupArn: !Ref TargetGroup
+
+  # Create an EC2 Instance (ECS Instance)
+  ECSInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0abcdef1234567890  # Replace with a valid AMI ID
+      KeyName: my-key-pair  # Replace with your key pair name
+      IamInstanceProfile: !Ref ECSInstanceProfile
+      SecurityGroupIds:
+        - !Ref ECSInstanceSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y amazon-ecs-agent
+          service docker start
+          start ecs
+
+  # Create an ECS Instance Profile
+  ECSInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref ECSTaskExecutionRole
+
+  # Create a Security Group for the ECS Instance
+  ECSInstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: http
+          FromPort: '3000'
+          ToPort: '3000'
+          CidrIp: 0.0.0.0/0
+
+  # IAM Role for ECS Task
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MyTaskPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:*
+                  - s3:*
+                  - ses:*
+                  - ssm:*
+                Resource: *
+
+
+
+  # IAM Role for ECS Task Execution
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MyExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:*
+                  - logs:*
+                Resource: "*"
+
+Outputs:
+  TaskRoleArn:
+    Description: "The ARN of the ECS Task Role"
+    Value: !GetAtt ECSTaskRole.Arn
